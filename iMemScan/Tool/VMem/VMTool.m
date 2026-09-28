@@ -11,6 +11,9 @@
 //#import "MemRecordModel.h"
 //#import "VMAlertTool.h"
 #include "mem.h"
+#include "scanner_ios.h"
+#include "scanner_bridge.h"
+#include "freeze_ios.h"
 #import "VMOneKeyModel.h"
 #import <dlfcn.h>
 #import <mach-o/dyld.h>
@@ -58,6 +61,10 @@ typedef struct _range{
     NSArray *_currentResult;
     // 0-数值，1-邻近
     NSInteger _searchType;
+
+    // ramdaemon-style scan state (unknown scan / next filter / undo)
+    ScanState _scanState;
+    FreezeList _freezeList;
 }
 @property (nonatomic,  assign) int  pid;
 @end
@@ -83,6 +90,7 @@ OBJC_EXTERN CFStringRef MGCopyAnswer(CFStringRef key) WEAK_IMPORT_ATTRIBUTE;
         //g_task = mach_task_self();
         g_chain = NULL;
         g_type = SearchResultValueTypeUndef;
+        state_init(&_scanState);
         
 #if 1
         NSString *path = @"/var/mobile/Media/iMemScan(Script)/Set.data";
@@ -196,11 +204,14 @@ OBJC_EXTERN CFStringRef MGCopyAnswer(CFStringRef key) WEAK_IMPORT_ATTRIBUTE;
 {
     destroy_all_search_result_chain(g_chain);
     g_chain = NULL;
+    state_reset(&_scanState);
+    freeze_stop();
+    freeze_list_free(&_freezeList);
 }
 
 - (void)refreshWithCallback:(VMToolSearchBlock)block
 {
-    if (g_chain == NULL) {
+    if (g_chain == NULL && _scanState.kind != DSTATE_CANDIDATES) {
         block(0, @[]);
         return;
     }
@@ -208,12 +219,248 @@ OBJC_EXTERN CFStringRef MGCopyAnswer(CFStringRef key) WEAK_IMPORT_ATTRIBUTE;
     __weak typeof(self) ws = self;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         __strong typeof(ws) ss = ws;
-        review_mem_in_chain(ss->g_task, ss->g_chain);
+
+        if (ss->g_chain != NULL) {
+            review_mem_in_chain(ss->g_task, ss->g_chain);
+        } else if (ss->_scanState.kind == DSTATE_CANDIDATES) {
+            // Engine ramdaemon: cap nhat gia tri hien hanh cua candidates (khong loc bot)
+            size_t vsize = value_type_size(ss->_scanState.cands.type);
+            for (size_t i = 0; i < ss->_scanState.cands.count; i++) {
+                unsigned char cur[8];
+                ssize_t got = ios_read_value(ss->g_task, ss->_scanState.cands.items[i].addr, cur, vsize);
+                if (got == (ssize_t)vsize) {
+                    memcpy(ss->_scanState.cands.items[i].last_value, cur, vsize);
+                }
+            }
+        }
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self updateChainArray:ss->g_chain count:ss->_chainCount callback:block];
+            if (ss->g_chain != NULL) {
+                [ss updateChainArray:ss->g_chain count:ss->_chainCount callback:block];
+            } else {
+                ss->_type = (VMMemValueType)(ss->_scanState.cands.type + 1);
+                [ss updateScanStateArray:(NSInteger)ss->_scanState.cands.count callback:block];
+            }
         });
     });
+}
+
+#pragma mark - ramdaemon-style advanced scan
+
+// Buoc 1 (unknown): chup toan bo vung ghi duoc vao RAM — chua can biet gia tri
+- (void)scanUnknown:(VMMemValueType)type callback:(VMToolSearchBlock)block
+{
+    // Hai engine loai tru nhau: bat dau luong unknown thi huy ket qua chain cu
+    destroy_all_search_result_chain(g_chain);
+    g_chain = NULL;
+    _chainCount = 0;
+    _type = type;
+    _searchType = 0;
+    ValueType t = vmtype_to_valuetype(type);
+
+    __weak typeof(self) ws = self;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        __strong typeof(ws) ss = ws;
+        Snapshot snap;
+        int rc = ios_scan_unknown(ss->g_task, t, &snap);
+        if (rc == 0) {
+            state_set_snapshot(&ss->_scanState, &snap);
+        } else {
+            snapshot_free(&snap);
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            // count = -1: da chup snapshot (kiem tra bang scanStateKind)
+            if (block) block(rc == 0 ? -1 : 0, @[]);
+        });
+    });
+}
+
+// Buoc 2+: loc theo thay doi so voi buoc truoc (changed/unchanged/tang/giam)
+- (void)nextFilter:(VMMemNextFilter)filter callback:(VMToolSearchBlock)block
+{
+    _searchType = 0;
+    CompareType cmp = CMP_CHANGED;
+    switch (filter) {
+        case VMMemNextFilterUnchanged: cmp = CMP_UNCHANGED; break;
+        case VMMemNextFilterIncreased: cmp = CMP_INCREASED; break;
+        case VMMemNextFilterDecreased: cmp = CMP_DECREASED; break;
+        case VMMemNextFilterChanged:
+        default: break;
+    }
+
+    __weak typeof(self) ws = self;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        __strong typeof(ws) ss = ws;
+        NSInteger count = 0;
+
+        if (ss->_scanState.kind == DSTATE_SNAPSHOT) {
+            ScanResult out;
+            if (ios_scan_unknown_next(ss->g_task, &ss->_scanState.snap, cmp, &out) >= 0) {
+                state_set_candidates(&ss->_scanState, &out);
+                count = (NSInteger)out.count;
+            }
+        } else if (ss->_scanState.kind == DSTATE_CANDIDATES) {
+            ScanResult out;
+            if (ios_scan_next(ss->g_task, &ss->_scanState.cands, cmp, NULL, &out) >= 0) {
+                state_set_candidates(&ss->_scanState, &out);
+                count = (NSInteger)out.count;
+            }
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            ss->_type = (VMMemValueType)(ss->_scanState.cands.type + 1);
+            [ss updateScanStateArray:count callback:block];
+        });
+    });
+}
+
+// Buoc 2+: loc theo gia tri chinh xac
+- (void)nextValue:(NSString *)value callback:(VMToolSearchBlock)block
+{
+    _searchType = 0;
+
+    __weak typeof(self) ws = self;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        __strong typeof(ws) ss = ws;
+        NSInteger count = 0;
+
+        if (ss->_scanState.kind == DSTATE_CANDIDATES) {
+            const char *v = [value UTF8String];
+            unsigned char bytes[8] = {0};
+            parse_value(ss->_scanState.cands.type, v, bytes);
+            ScanResult out;
+            if (ios_scan_next(ss->g_task, &ss->_scanState.cands, CMP_EXACT, bytes, &out) >= 0) {
+                state_set_candidates(&ss->_scanState, &out);
+                count = (NSInteger)out.count;
+            }
+        } else if (ss->_scanState.kind == DSTATE_SNAPSHOT) {
+            // ramdaemon: scan <val> ngay sau unknown scan -> loc snapshot theo gia tri hien tai
+            const char *v = [value UTF8String];
+            unsigned char bytes[8] = {0};
+            parse_value(ss->_scanState.snap.type, v, bytes);
+            ScanResult out;
+            if (ios_scan_snapshot_value(ss->g_task, &ss->_scanState.snap, bytes, &out) >= 0) {
+                state_set_candidates(&ss->_scanState, &out);
+                count = (NSInteger)out.count;
+            }
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            ss->_type = (VMMemValueType)(ss->_scanState.cands.type + 1);
+            [ss updateScanStateArray:count callback:block];
+        });
+    });
+}
+
+// Hoan tac 1 buoc loc (toi da 5 muc lich su, nhu ramdaemon)
+- (BOOL)undoScan
+{
+    return state_undo(&_scanState) == 0;
+}
+
+- (DaemonStateKind)scanStateKind
+{
+    return _scanState.kind;
+}
+
+- (BOOL)hasScanState
+{
+    return _scanState.kind != DSTATE_EMPTY;
+}
+
+#pragma mark - freeze (GCD timer)
+
+- (BOOL)freezeValue:(NSString *)value address:(NSString *)address type:(VMMemValueType)type
+{
+    uint64_t a = [self addressFromString:address];
+    ValueType t = vmtype_to_valuetype(type);
+    unsigned char bytes[8] = {0};
+    parse_value(t, [value UTF8String], bytes);
+
+    freeze_list_add(&_freezeList, a, t, bytes);
+    if (freeze_is_running()) return YES;
+    return freeze_start(g_task, &_freezeList) == 0;
+}
+
+- (void)unfreezeValue:(NSString *)address
+{
+    uint64_t a = [self addressFromString:address];
+    freeze_list_remove(&_freezeList, a);
+}
+
+- (void)unfreezeAll
+{
+    freeze_stop();
+    freeze_list_free(&_freezeList);
+}
+
+- (BOOL)freezing
+{
+    return freeze_is_running() == 1;
+}
+
+// Build mang MemModel tu ScanState.cands (tuong duong updateChainArray nhung cho mang contiguous)
+- (void)updateScanStateArray:(NSInteger)count callback:(VMToolSearchBlock)block
+{
+    NSLog(@"memlog: 结果数量: %@", @(count));
+
+    NSMutableArray *marr = @[].mutableCopy;
+
+    if (_scanState.kind == DSTATE_CANDIDATES &&
+        _scanState.cands.count > 0 &&
+        (NSInteger)_scanState.cands.count <= MaxResultCount) {
+        for (size_t i = 0; i < _scanState.cands.count; i++) {
+            Candidate *c = &_scanState.cands.items[i];
+            MemModel *model = [[MemModel alloc] init];
+            model.o_addr = c->addr;
+            model.value = [self valueStringFromBytes:c->last_value type:_scanState.cands.type];
+            model.type = _type;
+            if (_searchType == 0) [marr addObject:model];
+            if (_searchType == 1) if (![marr containsObject:model]) [marr addObject:model];
+        }
+
+        [marr sortUsingComparator:^NSComparisonResult(MemModel *obj1, MemModel *obj2) {
+            return [obj1.address compare:obj2.address];
+        }];
+    }
+
+    _currentResult = marr;
+
+    if (block) {
+        block(count, marr);
+    }
+}
+
+- (uint64_t)addressFromString:(NSString *)str
+{
+    mach_vm_address_t a = 0;
+    NSScanner *scanner = [NSScanner scannerWithString:str];
+    if ([str hasPrefix:@"0x"] || [str hasPrefix:@"0X"]) {
+        [scanner scanHexLongLong:&a];
+    } else {
+        if (![scanner scanUnsignedLongLong:&a]) {
+            a = (mach_vm_address_t)[str longLongValue];
+        }
+    }
+    return (uint64_t)a;
+}
+
+- (NSString *)valueStringFromBytes:(const unsigned char *)bytes type:(ValueType)type
+{
+    switch (type) {
+        case VAL_U8:  { uint8_t v;  memcpy(&v, bytes, 1); return [NSString stringWithFormat:@"%u", v]; }
+        case VAL_I8:  { int8_t v;   memcpy(&v, bytes, 1); return [NSString stringWithFormat:@"%d", v]; }
+        case VAL_U16: { uint16_t v; memcpy(&v, bytes, 2); return [NSString stringWithFormat:@"%u", v]; }
+        case VAL_I16: { int16_t v;  memcpy(&v, bytes, 2); return [NSString stringWithFormat:@"%d", v]; }
+        case VAL_U32: { uint32_t v; memcpy(&v, bytes, 4); return [NSString stringWithFormat:@"%u", v]; }
+        case VAL_I32: { int32_t v;  memcpy(&v, bytes, 4); return [NSString stringWithFormat:@"%d", v]; }
+        case VAL_U64: { uint64_t v; memcpy(&v, bytes, 8); return [NSString stringWithFormat:@"%llu", v]; }
+        case VAL_I64: { int64_t v;  memcpy(&v, bytes, 8); return [NSString stringWithFormat:@"%lld", v]; }
+        case VAL_F32: { float v;    memcpy(&v, bytes, 4); return [NSString stringWithFormat:@"%.7g", v]; }
+        case VAL_F64: { double v;   memcpy(&v, bytes, 8); return [NSString stringWithFormat:@"%.15le", v]; }
+    }
+    return @"0";
 }
 
 - (NSArray *)memory:(NSString *)address size:(NSString *)size type:(VMMemSearchType)type valueType:(VMMemValueType)valueType

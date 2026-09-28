@@ -125,6 +125,10 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
             
             items?.append(item)
         }
+        
+        // Long-press "Value Search" = undo one filter step (ramdaemon history)
+        let undoLP = UILongPressGestureRecognizer(target: self, action: #selector(undoScanAction(_:)))
+        button3?.addGestureRecognizer(undoLP)
         navigationController?.navigationBar.shadowImage = UIImage()
         navigationItem.leftBarButtonItems = (items as! [UIBarButtonItem])
         navigationItem.rightBarButtonItem = UIBarButtonItem(customView: {
@@ -238,12 +242,51 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
     // MARK: - 数值搜索
     func searchAction() {
         searchType = 0
+        if VMTool.share().hasScanState {
+            textField1.placeholder = NSLocalizedString("New value (empty = changed)", comment: "")
+        } else {
+            textField1.placeholder = NSLocalizedString("numerical value", comment: "")
+        }
         showAlert(NSLocalizedString("Numeric search", comment: ""))
+    }
+    
+    // Undo 1 buoc loc cua luong quet ramdaemon (long-press Value Search)
+    @objc func undoScanAction(_ gesture: UILongPressGestureRecognizer?) {
+        guard gesture?.state == .began else { return }
+        if !VMTool.share().hasScanState {
+            return
+        }
+        if VMTool.share().undoScan() {
+            dataArray.removeAll()
+            tableView.reloadData()
+            Refresh()
+        } else {
+            UIAlertController.showAlert4("🫥", message: NSLocalizedString("Nothing to undo.", comment: ""), btnTitle: "ok")
+        }
+    }
+    
+    // Hien thi ket qua cua nextFilter/nextValue (luong ramdaemon)
+    func applyScanResults(_ array: [Any], key: String) {
+        if array.count == 0 {
+            UIAlertController.showAlert4("🫥", message: NSLocalizedString("No matches left.", comment: ""), btnTitle: "ok")
+            return
+        }
+        
+        dataArray.removeAll()
+        (array as NSArray).enumerateObjects({ model, idx, stop in
+            (model as! MemModel).key = key
+        })
+        dataArray.append(contentsOf: array)
+        tableView.reloadData()
     }
 
     // MARK: - 邻近搜索
     
     func nearSearchAction() {
+        if VMTool.share().hasScanState {
+            UIAlertController.showAlert4("🫥", message: NSLocalizedString("Nearby search works on the legacy result list. Clear results first.", comment: ""), btnTitle: "ok")
+            return
+        }
         
         if dataArray.count > 1000000 {
             UIAlertController.showAlert4("🙄", message: NSLocalizedString("Please click clear. I already have 1 million data and you are searching for someone nearby.", comment: ""), btnTitle: "ok")
@@ -299,7 +342,7 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
     func refreshAction() {
         alertView!.endEditing(true)
 
-        if textField1.text!.count == 0 {
+        if textField1.text!.count == 0 && searchType != 0 {
             return
         }
         
@@ -313,6 +356,36 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
             
             let type = typeKeyValues![key] as! Int32
             let comp = VMMemComparisonEQ
+            
+            // ramdaemon flow: state rong + input rong = unknown scan; co state = buoc loc tiep
+            if text!.count == 0 {
+                if VMTool.share().hasScanState {
+                    VMTool.share().nextFilter(.changed, callback: { [self] count, array in
+                        self.applyScanResults(array, key: key)
+                        self.loadingView.stopAnimating()
+                    })
+                } else {
+                    VMTool.share().scanUnknown(VMMemValueType(rawValue: VMMemValueType.RawValue(type)), callback: { [self] count, array in
+                        self.loadingView.stopAnimating()
+                        if count == -1 {
+                            self.dataArray.removeAll()
+                            self.tableView.reloadData()
+                            UIAlertController.showAlert4("🫥", message: NSLocalizedString("Unknown scan done: writable memory snapshotted. Change the value in game, then search again (empty = changed, value = exact). Long-press Value Search to undo.", comment: ""), btnTitle: "ok")
+                        } else {
+                            UIAlertController.showAlert4("😅", message: NSLocalizedString("Unknown scan failed.", comment: ""), btnTitle: "ok")
+                        }
+                    })
+                }
+                return
+            }
+            
+            if VMTool.share().hasScanState {
+                VMTool.share().nextValue(text!, callback: { [self] count, array in
+                    self.applyScanResults(array, key: key)
+                    self.loadingView.stopAnimating()
+                })
+                return
+            }
             
             VMTool.share().searchValue(text!, type: VMMemValueType(rawValue: VMMemValueType.RawValue(type)), comparison: comp, callback: { [self] count, array in
                 

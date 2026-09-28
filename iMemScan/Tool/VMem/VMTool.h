@@ -8,12 +8,20 @@
 
 #import <Foundation/Foundation.h>
 #import "VMTypeHeader.h"
+#include "scanner_core.h"
 
 @class MemRecordModel;
 
 NS_ASSUME_NONNULL_BEGIN
 
 typedef void(^VMToolSearchBlock)(NSInteger count, NSArray *array);
+
+typedef NS_ENUM(NSUInteger, VMMemNextFilter) {
+    VMMemNextFilterChanged,
+    VMMemNextFilterUnchanged,
+    VMMemNextFilterIncreased,
+    VMMemNextFilterDecreased,
+};
 
 @interface VMTool : NSObject
 
@@ -31,6 +39,20 @@ typedef void(^VMToolSearchBlock)(NSInteger count, NSArray *array);
 
 - (void)reset;
 - (void)refreshWithCallback:(VMToolSearchBlock)block;
+
+// ===== ramdaemon-style advanced scan =====
+- (void)scanUnknown:(VMMemValueType)type callback:(VMToolSearchBlock)block;
+- (void)nextFilter:(VMMemNextFilter)filter callback:(VMToolSearchBlock)block;
+- (void)nextValue:(NSString *)value callback:(VMToolSearchBlock)block;
+- (BOOL)undoScan;
+@property (nonatomic, readonly) DaemonStateKind scanStateKind;
+@property (nonatomic, readonly) BOOL hasScanState; // snapshot/candidates dang ton tai (engine ramdaemon)
+
+// ===== freeze (GCD timer, thay the fork-based freeze cua ramdaemon) =====
+- (BOOL)freezeValue:(NSString *)value address:(NSString *)address type:(VMMemValueType)type;
+- (void)unfreezeValue:(NSString *)address;
+- (void)unfreezeAll;
+@property (nonatomic, readonly) BOOL freezing;
 
 // 查看内存
 - (NSArray *)memory:(NSString *)address size:(NSString *)size type:(VMMemSearchType)type valueType:(VMMemValueType)valueType;

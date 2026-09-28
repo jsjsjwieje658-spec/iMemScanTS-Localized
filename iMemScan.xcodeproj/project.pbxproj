@@ -209,6 +209,9 @@
 		48C9D34F26CA129300E1C766 /* search_result.c in Sources */ = {isa = PBXBuildFile; fileRef = 48C9D34B26CA129300E1C766 /* search_result.c */; };
 		48C9D35026CA129300E1C766 /* mem_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = 48C9D34C26CA129300E1C766 /* mem_utils.c */; };
 		48D8DC3526CE6CD20017A4AD /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 48D8DC3726CE6CD20017A4AD /* Localizable.strings */; };
+		7A5C00000000000000000011 /* scanner_core.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A5C00000000000000000002 /* scanner_core.c */; };
+		7A5C00000000000000000012 /* scanner_ios.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A5C00000000000000000004 /* scanner_ios.m */; };
+		7A5C00000000000000000013 /* freeze_ios.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A5C00000000000000000006 /* freeze_ios.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -470,6 +473,13 @@
 		48D8DC3226CE6CA20017A4AD /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/LaunchScreen.strings"; sourceTree = "<group>"; };
 		48D8DC3826CE6CD70017A4AD /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		803AA9FE2B28B10F004DED19 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
+		7A5C00000000000000000001 /* scanner_core.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = scanner_core.h; sourceTree = "<group>"; };
+		7A5C00000000000000000002 /* scanner_core.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = scanner_core.c; sourceTree = "<group>"; };
+		7A5C00000000000000000003 /* scanner_ios.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = scanner_ios.h; sourceTree = "<group>"; };
+		7A5C00000000000000000004 /* scanner_ios.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = scanner_ios.m; sourceTree = "<group>"; };
+		7A5C00000000000000000005 /* freeze_ios.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = freeze_ios.h; sourceTree = "<group>"; };
+		7A5C00000000000000000006 /* freeze_ios.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = freeze_ios.m; sourceTree = "<group>"; };
+		7A5C00000000000000000007 /* scanner_bridge.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = scanner_bridge.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -529,6 +539,7 @@
 				489EEC9F26C50F0F00AF4708 /* MemModel.h */,
 				489EEC9B26C50F0F00AF4708 /* MemModel.m */,
 				489EEC9A26C50F0F00AF4708 /* VMTypeHeader.h */,
+				7A5C00000000000000000007 /* scanner_bridge.h */,
 			);
 			path = VMem;
 			sourceTree = "<group>";
@@ -1148,6 +1159,12 @@
 				48C9D34926CA129300E1C766 /* search_result_def.h */,
 				48C9D34B26CA129300E1C766 /* search_result.c */,
 				48C9D34826CA129300E1C766 /* search_result.h */,
+				7A5C00000000000000000001 /* scanner_core.h */,
+				7A5C00000000000000000002 /* scanner_core.c */,
+				7A5C00000000000000000003 /* scanner_ios.h */,
+				7A5C00000000000000000004 /* scanner_ios.m */,
+				7A5C00000000000000000005 /* freeze_ios.h */,
+				7A5C00000000000000000006 /* freeze_ios.m */,
 			);
 			path = mem;
 			sourceTree = "<group>";
@@ -1302,6 +1319,9 @@
 				48A777F126CF5CF100CFD7C8 /* VMOneKeyCell.swift in Sources */,
 				489EEC1D26C50F0700AF4708 /* MJRefreshGifHeader.m in Sources */,
 				48C9D34E26CA129300E1C766 /* mem.m in Sources */,
+				7A5C00000000000000000011 /* scanner_core.c in Sources */,
+				7A5C00000000000000000012 /* scanner_ios.m in Sources */,
+				7A5C00000000000000000013 /* freeze_ios.m in Sources */,
 				489EEBFC26C50F0700AF4708 /* RequestTaskMap.swift in Sources */,
 				489EEC5526C50F0700AF4708 /* ObjCClassType.swift in Sources */,
 				489EEC4E26C50F0700AF4708 /* StructType.swift in Sources */,
