@@ -21,3 +21,23 @@
 "确定卸载" = "Complete Uninstallation";
 "取消" = "Cancel";
 "复制设备码成功" = "Copy device code successfully";
+
+/* ramdaemon scan panel */
+"New Scan" = "新建扫描";
+"Unknown" = "未知值";
+"Undo" = "撤销";
+"Changed" = "已变化";
+"Unchanged" = "未变化";
+"Increased" = "增大";
+"Decreased" = "减小";
+"Idle — start with New Scan or Unknown." = "空闲 — 请先「新建扫描」或「未知值扫描」。";
+"Snapshot ready — change the value in game, then tap a filter." = "快照就绪 — 先在游戏中改变数值，再点击筛选。";
+"Candidates: %@" = "候选：%@";
+"Results: %@" = "结果：%@";
+"Snapshot OK. Change the value in the game now, then tap Changed / Increased / Decreased / Unchanged to filter." = "快照完成。现在请在游戏中改变数值，然后点击 已变化 / 增大 / 减小 / 未变化 进行筛选。";
+"Unknown scan failed." = "未知值扫描失败。";
+"Start a scan first (New Scan or Unknown)." = "请先开始扫描（新建扫描或未知值）。";
+"Nothing to undo." = "没有可撤销的步骤。";
+"No matches left." = "没有匹配项了。";
+"Nearby search works on the legacy result list. Clear results first." = "邻近搜索仅用于旧结果列表，请先清除结果。";
+"Unknown scan done: writable memory snapshotted. Change the value in game, then search again (empty = changed, value = exact). Long-press Value Search to undo." = "未知值扫描完成：已快照可写内存。在游戏中改变数值后再次搜索（留空=已变化，输入=精确值）。长按「搜索」可撤销。";

@@ -109,17 +109,23 @@
 "Cancel" = "Abbrechen";
 "%ld Seconds" = "%ld Sekunden";
 "Numeric Search" = "Suche";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
-"" = "";
+
+/* ramdaemon scan panel */
+"New Scan" = "Neuer Scan";
+"Unknown" = "Unbekannt";
+"Undo" = "Rückgängig";
+"Changed" = "Geändert";
+"Unchanged" = "Unverändert";
+"Increased" = "Erhöht";
+"Decreased" = "Verringert";
+"Idle — start with New Scan or Unknown." = "Bereit — mit 'Neuer Scan' oder 'Unbekannt' beginnen.";
+"Snapshot ready — change the value in game, then tap a filter." = "Snapshot bereit — Wert im Spiel ändern, dann einen Filter antippen.";
+"Candidates: %@" = "Kandidaten: %@";
+"Results: %@" = "Ergebnisse: %@";
+"Snapshot OK. Change the value in the game now, then tap Changed / Increased / Decreased / Unchanged to filter." = "Snapshot erstellt. Jetzt den Wert im Spiel ändern, dann Geändert / Erhöht / Verringert / Unverändert antippen.";
+"Unknown scan failed." = "Unbekannt-Scan fehlgeschlagen.";
+"Start a scan first (New Scan or Unknown)." = "Zuerst einen Scan starten (Neuer Scan oder Unbekannt).";
+"Nothing to undo." = "Nichts zum Rückgängigmachen.";
+"No matches left." = "Keine Treffer mehr.";
+"Nearby search works on the legacy result list. Clear results first." = "Die Umkreissuche nutzt die alte Ergebnisliste. Bitte zuerst löschen.";
+"Unknown scan done: writable memory snapshotted. Change the value in game, then search again (empty = changed, value = exact). Long-press Value Search to undo." = "Unbekannt-Scan fertig: beschreibbarer Speicher gesnapshottet. Wert im Spiel ändern, dann erneut suchen (leer = geändert, Wert = exakt). 'Suche' lang drücken zum Rückgängigmachen.";

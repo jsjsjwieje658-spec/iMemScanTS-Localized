@@ -31,3 +31,23 @@
 "Select Second Half" = " > ";
 "Numeric Search" = "Search";
 "Value Search" = "Search";
+
+/* ramdaemon scan panel */
+"New Scan" = "New Scan";
+"Unknown" = "Unknown";
+"Undo" = "Undo";
+"Changed" = "Changed";
+"Unchanged" = "Unchanged";
+"Increased" = "Increased";
+"Decreased" = "Decreased";
+"Idle — start with New Scan or Unknown." = "Idle — start with New Scan or Unknown.";
+"Snapshot ready — change the value in game, then tap a filter." = "Snapshot ready — change the value in game, then tap a filter.";
+"Candidates: %@" = "Candidates: %@";
+"Results: %@" = "Results: %@";
+"Snapshot OK. Change the value in the game now, then tap Changed / Increased / Decreased / Unchanged to filter." = "Snapshot OK. Change the value in the game now, then tap Changed / Increased / Decreased / Unchanged to filter.";
+"Unknown scan failed." = "Unknown scan failed.";
+"Start a scan first (New Scan or Unknown)." = "Start a scan first (New Scan or Unknown).";
+"Nothing to undo." = "Nothing to undo.";
+"No matches left." = "No matches left.";
+"Nearby search works on the legacy result list. Clear results first." = "Nearby search works on the legacy result list. Clear results first.";
+"Unknown scan done: writable memory snapshotted. Change the value in game, then search again (empty = changed, value = exact). Long-press Value Search to undo." = "Unknown scan done: writable memory snapshotted. Change the value in game, then search again (empty = changed, value = exact). Long-press Value Search to undo.";

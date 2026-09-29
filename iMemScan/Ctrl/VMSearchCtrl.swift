@@ -26,6 +26,9 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
     var offsetY: CGFloat = 0.0
     var searchType:NSInteger = 0
     var modifyType:NSInteger = 0
+    var scanStateLabel: UILabel?
+    var filterChips: [UIButton] = []
+    var undoChip: UIButton?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -143,6 +146,8 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
             button.addTarget(self, action: #selector(clearAction), for: .touchUpInside)
             return button
         }())
+        
+        buildScanPanel()
     }
     
     
@@ -237,6 +242,7 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
         tableView.reloadData()
 
         VMTool.share().reset()
+        updateScanPanelState()
     }
 
     // MARK: - 数值搜索
@@ -259,6 +265,7 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
         if VMTool.share().undoScan() {
             dataArray.removeAll()
             tableView.reloadData()
+            updateScanPanelState()
             Refresh()
         } else {
             UIAlertController.showAlert4("🫥", message: NSLocalizedString("Nothing to undo.", comment: ""), btnTitle: "ok")
@@ -267,7 +274,9 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
     
     // Hien thi ket qua cua nextFilter/nextValue (luong ramdaemon)
     func applyScanResults(_ array: [Any], key: String) {
+        dataArray.removeAll()
         if array.count == 0 {
+            tableView.reloadData()
             UIAlertController.showAlert4("🫥", message: NSLocalizedString("No matches left.", comment: ""), btnTitle: "ok")
             return
         }
@@ -295,6 +304,145 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
         
         searchType = 1
         showAlert(NSLocalizedString("Proximity search", comment: ""))
+    }
+
+    // MARK: - Scan panel (ramdaemon quick actions)
+
+    func buildScanPanel() {
+        let width = UIScreen.main.bounds.width
+        let panel = UIView(frame: CGRect(x: 0, y: 0, width: width, height: 116))
+        panel.backgroundColor = .secondarySystemGroupedBackground
+
+        let stateLabel = UILabel(frame: CGRect(x: 14, y: 6, width: width - 28, height: 16))
+        stateLabel.font = UIFont.systemFont(ofSize: 12)
+        stateLabel.textColor = .secondaryLabel
+        stateLabel.text = NSLocalizedString("Idle — start with New Scan or Unknown.", comment: "")
+        panel.addSubview(stateLabel)
+        scanStateLabel = stateLabel
+
+        let margin: CGFloat = 14
+        let gap: CGFloat = 8
+
+        let scanChip = makeScanChip("New Scan", symbol: "magnifyingglass", color: .systemBlue, tag: 100, action: #selector(newScanTapped(_:)))
+        let unknownChip = makeScanChip("Unknown", symbol: "questionmark.circle", color: .systemIndigo, tag: 101, action: #selector(unknownScanTapped(_:)))
+        let undo = makeScanChip("Undo", symbol: "arrow.uturn.backward", color: .systemPurple, tag: 102, action: #selector(undoChipTapped(_:)))
+        undoChip = undo
+
+        let w1 = (width - margin * 2 - gap * 2) / 3
+        let row1: [UIButton] = [scanChip, unknownChip, undo]
+        for (i, chip) in row1.enumerated() {
+            chip.frame = CGRect(x: margin + CGFloat(i) * (w1 + gap), y: 28, width: w1, height: 32)
+            panel.addSubview(chip)
+        }
+
+        let changed = makeScanChip("Changed", symbol: "arrow.triangle.2.circlepath", color: .systemOrange, tag: 0, action: #selector(filterChipTapped(_:)))
+        let unchanged = makeScanChip("Unchanged", symbol: "equal", color: .systemGray, tag: 1, action: #selector(filterChipTapped(_:)))
+        let increased = makeScanChip("Increased", symbol: "arrow.up", color: .systemGreen, tag: 2, action: #selector(filterChipTapped(_:)))
+        let decreased = makeScanChip("Decreased", symbol: "arrow.down", color: .systemRed, tag: 3, action: #selector(filterChipTapped(_:)))
+
+        let w2 = (width - margin * 2 - gap * 3) / 4
+        let row2: [UIButton] = [changed, unchanged, increased, decreased]
+        filterChips = row2
+        for (i, chip) in row2.enumerated() {
+            chip.frame = CGRect(x: margin + CGFloat(i) * (w2 + gap), y: 68, width: w2, height: 32)
+            panel.addSubview(chip)
+        }
+
+        tableView.tableHeaderView = panel
+        updateScanPanelState()
+    }
+
+    func makeScanChip(_ titleKey: String, symbol: String?, color: UIColor, tag: Int, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.tag = tag
+        button.tintColor = color
+        button.setTitle(NSLocalizedString(titleKey, comment: ""), for: .normal)
+        button.setTitleColor(color, for: .normal)
+        button.setTitleColor(color.withAlphaComponent(0.5), for: .disabled)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 12.5, weight: .medium)
+        button.backgroundColor = .tertiarySystemFill
+        button.layer.cornerRadius = 16
+        if let symbol = symbol {
+            button.setImage(UIImage(systemName: symbol), for: .normal)
+            button.imageEdgeInsets = UIEdgeInsets(top: 0, left: -3, bottom: 0, right: 3)
+        }
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+
+    // Quet moi (gia tri chinh xac) - dung alert co san
+    @objc func newScanTapped(_ sender: UIButton?) {
+        searchAction()
+    }
+
+    // Quet khong biet gia tri ban dau: chup toan bo vung ghi duoc lam snapshot
+    @objc func unknownScanTapped(_ sender: UIButton?) {
+        guard let key = segment.titleForSegment(at: segment.selectedSegmentIndex),
+              let raw = typeKeyValues?[key] as? Int32 else { return }
+        let type = VMMemValueType(rawValue: VMMemValueType.RawValue(raw))
+
+        loadingView.startAnimating()
+        VMTool.share().scanUnknown(type, callback: { [self] count, _ in
+            loadingView.stopAnimating()
+            dataArray.removeAll()
+            tableView.reloadData()
+            updateScanPanelState()
+            if count == -1 {
+                UIAlertController.showAlert4("🫥", message: NSLocalizedString("Snapshot OK. Change the value in the game now, then tap Changed / Increased / Decreased / Unchanged to filter.", comment: ""), btnTitle: "ok")
+            } else {
+                UIAlertController.showAlert4("😅", message: NSLocalizedString("Unknown scan failed.", comment: ""), btnTitle: "ok")
+            }
+        })
+    }
+
+    // Buoc loc changed/unchanged/increased/decreased
+    @objc func filterChipTapped(_ sender: UIButton?) {
+        guard VMTool.share().hasScanState else {
+            UIAlertController.showAlert4("🫥", message: NSLocalizedString("Start a scan first (New Scan or Unknown).", comment: ""), btnTitle: "ok")
+            return
+        }
+        guard let filter = VMMemNextFilter(rawValue: UInt(sender?.tag ?? 0)) else { return }
+
+        loadingView.startAnimating()
+        VMTool.share().nextFilter(filter, callback: { [self] _, array in
+            loadingView.stopAnimating()
+            updateScanPanelState()
+            applyScanResults(array, key: segment.titleForSegment(at: segment.selectedSegmentIndex) ?? "")
+        })
+    }
+
+    // Hoan tac 1 buoc loc
+    @objc func undoChipTapped(_ sender: UIButton?) {
+        guard VMTool.share().hasScanState else { return }
+        if VMTool.share().undoScan() {
+            dataArray.removeAll()
+            tableView.reloadData()
+            updateScanPanelState()
+            Refresh()
+        } else {
+            UIAlertController.showAlert4("🫥", message: NSLocalizedString("Nothing to undo.", comment: ""), btnTitle: "ok")
+        }
+    }
+
+    func updateScanPanelState() {
+        let tool = VMTool.share()
+        var text = NSLocalizedString("Idle — start with New Scan or Unknown.", comment: "")
+        if tool.scanStateKind.rawValue == DSTATE_SNAPSHOT.rawValue {
+            text = NSLocalizedString("Snapshot ready — change the value in game, then tap a filter.", comment: "")
+        } else if tool.scanStateKind.rawValue == DSTATE_CANDIDATES.rawValue {
+            text = String(format: NSLocalizedString("Candidates: %@", comment: ""), NSNumber(value: dataArray.count))
+        } else if dataArray.count > 0 {
+            text = String(format: NSLocalizedString("Results: %@", comment: ""), NSNumber(value: dataArray.count))
+        }
+        scanStateLabel?.text = text
+
+        let enabled = tool.hasScanState
+        for chip in filterChips {
+            chip.isEnabled = enabled
+            chip.alpha = enabled ? 1.0 : 0.45
+        }
+        undoChip?.isEnabled = enabled
+        undoChip?.alpha = enabled ? 1.0 : 0.45
     }
     
     // MARK: - 搜索弹框
@@ -367,6 +515,7 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
                 } else {
                     VMTool.share().scanUnknown(VMMemValueType(rawValue: VMMemValueType.RawValue(type)), callback: { [self] count, array in
                         self.loadingView.stopAnimating()
+                        self.updateScanPanelState()
                         if count == -1 {
                             self.dataArray.removeAll()
                             self.tableView.reloadData()
@@ -382,6 +531,7 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
             if VMTool.share().hasScanState {
                 VMTool.share().nextValue(text!, callback: { [self] count, array in
                     self.applyScanResults(array, key: key)
+                    self.updateScanPanelState()
                     self.loadingView.stopAnimating()
                 })
                 return
@@ -627,6 +777,7 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
                 dataArray.append(contentsOf: array)
                 tableView.reloadData()
             }
+            updateScanPanelState()
             tableView.mj_header?.endRefreshing()
         })
     }
@@ -638,6 +789,7 @@ class VMSearchCtrl: UITableViewController, UITextFieldDelegate {
                 dataArray.append(contentsOf: array)
                 tableView.reloadData()
             }
+            updateScanPanelState()
         })
     }
     
